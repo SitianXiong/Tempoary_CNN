@@ -9,8 +9,8 @@ import numpy as np
 import cv2
 
 # Import files
-P_rf = gdal.Open(r'D:\Pass\Boka\MLP_test\11_62\pond_CNN\PanMrgAtCor_LC08_L1TP_011062_20150125_20170413_01_T1_B4.rst')  # input image
-I_rf = gdal.Open(r'D:\Pass\Boka\MLP_test\11_62\pond_CNN\PanMrgAtCor_LC08_L1TP_011062_20150125_20170413_01_T1_B4.rst')  # guide image
+P_rf = gdal.Open(r'D:\Pass\Boka\MLP_test\11_62\test\Comb\UpScAtCor_LC08_L1TP_011062_20150125_20170413_01_T1_B5.rst')  # input image
+I_rf = gdal.Open(r'D:\Pass\Boka\MLP_test\11_62\test\Comb\UpScAtCor_LC08_L1TP_011062_20150125_20170413_01_T1_B5.rst')  # guide image
 
 
 # Parameters of the scene
@@ -60,12 +60,12 @@ for r in range(5, 32, 4):
 
             # Output path and name
             output = guidefilter(I, P, r, eps)
-            out_path = r"D:\Pass\Boka\MLP_test\11_62\test\guided filter"
-            out_name = "\GF_11865_r" + str(r) + 'eps'+str(e)+'_B4_float32.rst'
+            out_path = r'D:\Pass\Boka\MLP_test\11_62\test\guided filter'
+            out_name = '\GF_1162_r' + str(r) + 'eps'+str(e)+'_B5.rst'
 
             # Write the result into an rst file
             rst_driver = gdal.GetDriverByName('RST')
-            out_ds = rst_driver.Create(out_path + out_name, col, row, 1, gdal.GDT_Float32)
+            out_ds = rst_driver.Create(out_path + out_name, col, row, 1, gdal.GDT_Float32) #output data type as float 32 bits
             out_ds.GetRasterBand(1).WriteArray(output)
             out_ds.SetProjection(pj)
             out_ds.SetGeoTransform(gt)
