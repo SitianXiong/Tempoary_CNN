@@ -52,6 +52,7 @@ for r in range(5, 32, 4):
                 return q
 
 
+            # Output path and name
             output = guidefilter(I, P, r, eps)
             out_path = r"D:\Pass\Boka\MLP_test\11_62\test\guided filter"
             out_name = "\GF_11865_r" + str(r) + 'eps'+str(e)+'_B4_float32.rst'
