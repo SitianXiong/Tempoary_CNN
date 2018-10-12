@@ -29,35 +29,35 @@ def boxfilter(I, r):
     bf = cv2.boxFilter(I, -1, (r, r))
     return bf
 
+ # Guided filter
+ def guidefilter(I, P, r, eps):
+     N = boxfilter(np.ones(np.shape(I)), r)
+
+     mean_I = boxfilter(I, r) / N
+     mean_P = boxfilter(P, r) / N
+     mean_IP = boxfilter(I * P, r) / N
+     cov_IP = mean_IP - mean_I * mean_P  # covariance of (I,P) in each local patch
+
+     mean_II = boxfilter(I * I, r) / N
+     var_I = mean_II - mean_I * mean_I
+
+     a = cov_IP / (var_I + eps)  # equation 5 in the paper
+     b = mean_P - a * mean_I  # equation 6 in the paper
+
+     mean_a = boxfilter(a, r) / N
+     mean_b = boxfilter(b, r) / N
+
+     q = mean_a * I + mean_b  # equation 8 in the paper
+     return q
+
+
 
 # Guided filter parameter setting
 # r: filter radius, eps: regularization coefficient
 for r in range(5, 32, 4):
     for e in range(50, 400, 100):
             eps = e ** 2
-
-            # Guided filter
-            def guidefilter(I, P, r, eps):
-                N = boxfilter(np.ones(np.shape(I)), r)
-
-                mean_I = boxfilter(I, r) / N
-                mean_P = boxfilter(P, r) / N
-                mean_IP = boxfilter(I * P, r) / N
-                cov_IP = mean_IP - mean_I * mean_P  # covariance of (I,P) in each local patch
-
-                mean_II = boxfilter(I * I, r) / N
-                var_I = mean_II - mean_I * mean_I
-
-                a = cov_IP / (var_I + eps)  # equation 5 in the paper
-                b = mean_P - a * mean_I  # equation 6 in the paper
-
-                mean_a = boxfilter(a, r) / N
-                mean_b = boxfilter(b, r) / N
-
-                q = mean_a * I + mean_b  # equation 8 in the paper
-                return q
-
-
+   
             # Output path and name
             output = guidefilter(I, P, r, eps)
             out_path = r'D:\Pass\Boka\MLP_test\11_62\test\guided filter'
