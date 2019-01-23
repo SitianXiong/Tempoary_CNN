@@ -34,7 +34,6 @@ def normPara(filepath,dtype=np.float32):
 
 #function to operate min max normalization
 def mmNorm (inTensor):
-    print('inTensor max:{}\ninTensor min:{}'.format(inTensor.max(),inTensor.min()))
     nom=inTensor-inTensor.min()
     denom=inTensor.max()-inTensor.min()
     return nom/denom
