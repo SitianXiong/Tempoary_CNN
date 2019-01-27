@@ -64,18 +64,13 @@ def batchIndex(cropRef,dsize,samp_num,trainIn,test,randImg=False):
         y_min=min(x[:,1])-random.randint(10,50)
         y_max=max(x[:,1])+random.randint(10,50)
     
-    min_max=[[x_min,y_min],[x_min,y_max],[x_max,y_min],[x_min,y_max]]
     index=[]
-    plot=[]
     j=y_min
-    while j<=y_max:
-        i=x_min
-        while i<=x_max:
-            plot.append([i,j])#
+    for j in range(y_min,y_max+1,dsize):
+        for i in range(x_min,x_max+1,dsize):
             if [i,j] in x.tolist():
                 index.append([i,j])
-            i+=dsize  #dsize?
-        j+=dsize  #dsize?
+                
     print(index)#
     print('#index:{}'.format(len(index)))
     
