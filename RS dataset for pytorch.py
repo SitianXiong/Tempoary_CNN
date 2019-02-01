@@ -6,13 +6,21 @@ This file is to create dataset of remote sensing for pytorch, including data loa
 It is also appliable to large scale raster data with crop needs
 '''
 
+#module import
 import gdal
 import numpy as np
+import matplotlib.pyplot as plt
+import os
+import cv2
 import random
+import time
 import gc
 
 import torch
 from torch import nn
+from torch import optim
+from torch.autograd import Variable
+import torch.nn.functional as F
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 
@@ -21,37 +29,51 @@ from torch.utils.data import Dataset, DataLoader
 def normPara(filepath,dtype=np.float32):
     print('--------------getting parameters for normalization--------------')
     files=[m for m in os.listdir(filepath) if(m.endswith('.rst'))]
-    img_data=[]
     mean=[]
     std=[]
-    for i in range(len(files[:-1])):
-        img_data.append(load_data(filepath,files[i]))
-        mean.append(torch.mean(img_data[i]))
-        std.append(torch.std(img_data[i]))
+    for file in files[:-1]:
+        mean.append(file.mean())
+        std.append(file.std())
     print('mean sequence: {}\nstd sequence: {}'.format(mean,std))
     return mean,std
 
 
 #function to operate min max normalization
-def mmNorm (inTensor):
-    nom=inTensor-inTensor.min()
-    denom=inTensor.max()-inTensor.min()
+def mmNorm (inArray):
+    nom=inArray-inArray.min()
+    denom=inArray.max()-inArray.min()
     return nom/denom
 
 
 #load data as tensor
-def load_data(root,file,mNorm=False,dtype=np.float32):   
+def load_data(root,file,mNorm=True,dtype=np.float32):
+    print('processing file:{}'.format(file))
     x=gdal.Open(os.path.join(root,file))
     x=x.ReadAsArray().astype(dtype)
-    x=torch.from_numpy(x)
     if mNorm:
         x=mmNorm(x)
-    return x   
+    return x
 
+#transformation functions
+##center rotation for images with any number of channels
+def centerRotate(data,degree):
+    (h,w)=data.shape[:2]
+    center=(w//2,h//2)
+    rotMtrx=cv2.getRotationMatrix2D(center,degree,1.0)
+    rotated=cv2.warpAffine(data,rotMtrx,(w,h))
+    return rotated
+
+##flip for images with any number of channels
+def flip(data, ftype='vflip'):
+    if ftype=='vflip':
+        return cv2.flip(data,0)
+    if ftype=='hflip':
+        return cv2.flip(data,1)
+    if ftype=='dflip':
+        return cv2.flip(data,-1)
 
 #get index for cropping
 def batchIndex(cropRef,dsize,samp_num,trainIn,test,randImg=False):
-    cropRef=cropRef.numpy()
     x=np.argwhere(cropRef>0)
     if randImg==False:
         x_min=min(x[:,0])
@@ -68,15 +90,15 @@ def batchIndex(cropRef,dsize,samp_num,trainIn,test,randImg=False):
     j=y_min
     for j in range(y_min,y_max+1,dsize):
         for i in range(x_min,x_max+1,dsize):
-            if [i,j] in x.tolist():
+            ref=cropRef[i-dsize//2:i+dsize//2,j-dsize//2:j+dsize//2]
+            if ref.any()==1:
                 index.append([i,j])
                 
-    print(index)#
     print('#index:{}'.format(len(index)))
     
     if samp_num>len(index)//2:   
         if test:
-            test_index=random.sample([m for m in index if m not in trainIn],len(index)//2) #half of cropped images not for train are for test
+            test_index=[m for m in index if (m not in trainIn)]
             print('testIn:\n{}'.format(test_index))
             return test_index
         else:
@@ -85,7 +107,7 @@ def batchIndex(cropRef,dsize,samp_num,trainIn,test,randImg=False):
             return train_index
     else:
         if test:
-            test_index=random.sample([m for m in index if m not in traindIn],samp_num)
+            test_index=random.sample([m for m in index if (m not in traindIn)],samp_num)
             print('testIn:\n{}'.format(test_index))
             return test_index
         else:
@@ -97,42 +119,40 @@ def batchIndex(cropRef,dsize,samp_num,trainIn,test,randImg=False):
 #extract labels from loaded data
 def getImageLabel(data):
      #construct image
-    img=torch.cat(data[:-1],0)
+    img=np.concatenate(data[:-1],-1)
     #check  if image is successfully constructed
-    img_c,_,_=img.size()  #extract channel counts
+    _,_,img_c=img.shape  #extract channel counts
     for i in range(img_c):
-        if torch.all(torch.eq(img[i,:,:], data[i][0,:,:])):
+        if img[:,:,i].all()==data[i][:,:,0].all():
             print ("Constructed {} channels".format(i+1))
         else:
             print ("Failed to construct image")
     #construct label
-    label=data[-1].squeeze().long()
+    label=np.squeeze(data[-1])
     return img, label
 
 
 #dataset of remote sensing for pytorch
 class rstData(Dataset):
-
-    def __init__(self,datapath,dsize,samp_num=20,randImg=False,trainIn=None,cropIn=None,test=False,mNorm=False,transform=None):
+      
+    def __init__(self,datapath,dsize,samp_num=20,randImg=False,trainIn=None,cropIn=None,test=False,mNorm=True,flip=None,deRotate=None,transform=None):
         
-        self.transform=transform
-        #extract data from files as tensor
+        self.deRotate=deRotate
+        #extract data from files as narray
         files=[m for m in os.listdir(datapath) if(m.endswith('.rst'))]
         self.file=files
         data=[]
         print('--------------loading data--------------')
-        for i in range(len(files)):
-            print('processing file:{}'.format(files[i]))
-            
-            data.append(load_data(datapath,files[i],mNorm))
-            data[i]=data[i].unsqueeze(0)
-            
+        for i in files:
+            dataLoad=load_data(datapath,i,mNorm)  ##expand dataset
+            data.append(np.expand_dims(dataLoad,-1))
+    
+    
         #construct image
         print('--------------constructing image channels--------------')
-        img, label= getImageLabel(data)
-       
-       
-        #create index for batch cropping
+        img,label=getImageLabel(data)
+        
+        #create index for patches cropping
         print('---------------cropping {}x{} batches--------------'.format(dsize,dsize))
         if cropIn==None:
             index=batchIndex(label,dsize,samp_num,trainIn,test,randImg)
@@ -149,25 +169,41 @@ class rstData(Dataset):
             for i in range(len(index)):
                 self.crop_x.append(index[i][0])
                 self.crop_y.append(index[i][1])
-
-        
-        #construct img, label batches by cropping image and label using created index
+                  
+                  
+        #create_dataset
         self.img=[]
         self.label=[]
+        self.coor=[]
         for i in range(len(self.crop_x)):
             x=self.crop_x[i]
             y=self.crop_y[i]
-            self.img.append(img[:,x-(dsize//2):x+(dsize//2),y-(dsize//2):y+(dsize//2)])
-            self.label.append(label[x-(dsize//2):x+(dsize//2),y-(dsize//2):y+(dsize//2)])
-        print('-------------{} bathces cropped-----------'.format(len(self.img)))
-   
+            self.img.append(img[x-(dsize//2):x+(dsize//2),y-(dsize//2):y+(dsize//2),:])
+            self.label.append(label[x-(dsize//2):x+(dsize//2),y-dsize//2:y+(dsize//2)])
+            self.coor.append([x,y])
+            #data augmentation-flip
+            if flip!=None:
+                  for ftype in flip:
+                        self.img.append(flip(img[x-(dsize//2):x+(dsize//2),y-dsize//2:y+(dsize//2),:],ftype))
+                        self.label.append(flip(label[x-(dsize//2):x+(dsize//2),y-dsize//2:y+(dsize//2)],ftype))
+                        self.coor.append([x,y])
             
-    def __getitem__(self,index,transform=None):
+        print('-------------{} bathces cropped-----------'.format(len(self.img)))
+    
+                  
+    def __getitem__(self,index):
         img=self.img[index]
         label=self.label[index]
-        if transform!= None:
-            img=self.transform(img)
-        return img, label, index
+        coor=self.coor[index]
+        deRotate=self.deRotate
+        if deRotate!=None:
+            degree=random.uniform(deRotate)
+            label=centerRotate(label,degree)
+            img=centerRotate(img,degree)
+        #transform numpy array to tensor
+        label=torch.from_numpy(label).long()
+        img=torch.from_numpy(img.transpose((2, 0, 1)))
+        return img, label,index, coor
        
         
     def __len__(self):
