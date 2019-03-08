@@ -1,5 +1,5 @@
 '''
-The code was rewritten into python based on the matlab code provided by Kaiming He . 
+The code was rewritten into python based on the matlab code provided by Dr. Kaiming He . 
 Reference: He, K., Sun, J., & Tang, X. (2010). Guided Image Filtering. Computer Vision – ECCV 2010. Springer Berlin Heidelberg.
            http://kaiminghe.com/publications/eccv10guidedfilter.pdf
 '''
